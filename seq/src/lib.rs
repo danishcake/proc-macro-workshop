@@ -1,18 +1,20 @@
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, parse::{Parse, ParseStream, ParseBuffer}, Token, LitInt, Error, Ident, braced};
 use quote::quote;
-use std::{result::Result, str::ParseBoolError};
-use std::ops;
+use std::result::Result;
+use syn::{
+    braced,
+    parse::{Parse, ParseStream},
+    parse_macro_input, Error, Ident, LitInt, Token,
+};
 
 struct Sequence {
     iteration_var: syn::Ident,
     lower_bound: LitInt,
     upper_bound: LitInt,
-    body: TokenStream
+    body: TokenStream,
 }
 
 impl Parse for Sequence {
-
     // Parses the input to the seq macro
     // This will consist of a variable, range and a block
     // seq!(N in 0..8 {
@@ -32,7 +34,7 @@ impl Parse for Sequence {
             iteration_var,
             lower_bound,
             upper_bound,
-            body: body.into()
+            body: body.into(),
         })
     }
 }
@@ -41,5 +43,21 @@ impl Parse for Sequence {
 pub fn seq(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as Sequence);
 
-    TokenStream::new()
+    let unrolled_loop = (input.lower_bound.base10_parse::<i32>().unwrap()
+        ..input.upper_bound.base10_parse::<i32>().unwrap())
+        .map(|_f| {
+            // The input.body is a proc_macro::TokenStream. Quoting is a lazy way to convert
+            // to a proc_macro2::TokenStream
+            // TODO: Do this conversion properly so that it actually compiles
+            quote! {
+                #input.body
+            }
+        });
+
+    let output = quote! {
+        #(#unrolled_loop)*
+    };
+
+    eprintln!("TOKENS: {}", output);
+    output.into()
 }
